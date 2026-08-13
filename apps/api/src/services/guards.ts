@@ -20,6 +20,7 @@ export function riskGate(walletBalanceSol:number) {
   if(s.status==="emergency_stop") return {ok:false,reason:"Emergency stop engaged"};
   if(s.status!=="running") return {ok:false,reason:"Bot is not running"};
   if(process.env.EXECUTION_ENABLED!=="true") return {ok:false,reason:"Execution is locked"};
+  if(!c.walletEnabled || !c.walletAddress) return {ok:false,reason:"Wallet is OFF or not connected"};
   if(walletBalanceSol<c.minimumWalletBalanceSol) return {ok:false,reason:"Wallet balance below minimum"};
 
   const count=(db.prepare("SELECT COUNT(*) c FROM trades WHERE buyTime>=?").get(today()) as any).c;
