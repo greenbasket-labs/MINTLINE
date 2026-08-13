@@ -1,8 +1,12 @@
 import type { SellDecision } from "@mintline/shared";
 
 export interface TpConfig {
-  tp1Percent:number; tp1SellPercent:number; tp2Percent:number;
-  tp2SellPercent:number; moonbagPercent:number;
+  tp1Percent:number;
+  tp1SellPercent:number;
+  tp2Percent:number;
+  tp2SellPercent:number;
+  moonbagPercent:number;
+  tpLadderEnabled?:boolean;
 }
 
 export function validateTp(c:TpConfig):boolean {
@@ -13,6 +17,7 @@ export function validateTp(c:TpConfig):boolean {
 }
 
 export function sellDecision(profitPercent:number,soldPercent:number,c:TpConfig):SellDecision {
+  if(c.tpLadderEnabled === false) return {sellPercent:0,stage:"hold"};
   if (profitPercent >= c.tp1Percent && soldPercent < c.tp1SellPercent)
     return {sellPercent:c.tp1SellPercent,stage:"tp1"};
 
