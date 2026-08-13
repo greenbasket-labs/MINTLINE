@@ -1,20 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { DEFAULTS, type BotConfig } from "@mintline/shared";
 
-import {
-  DEFAULTS,
-  type BotConfig,
-} from "@mintline/shared";
-
-const file =
-  process.env.DATABASE_PATH ?? "./data/mintline.db";
-
-mkdirSync(
-  path.dirname(path.resolve(file)),
-  { recursive: true },
-);
-
+const file = process.env.DATABASE_PATH ?? "./data/mintline.db";
+mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
 export const db = new DatabaseSync(file);
 
 db.exec(`
@@ -37,7 +27,13 @@ db.exec(`
     moonbagPercent REAL NOT NULL,
     consecutiveLossStop INTEGER NOT NULL,
     minimumWalletBalanceSol REAL NOT NULL,
-    maximumConcurrentPositions INTEGER NOT NULL
+    maximumConcurrentPositions INTEGER NOT NULL,
+    walletEnabled INTEGER NOT NULL DEFAULT 0,
+    walletAddress TEXT NOT NULL DEFAULT '',
+    tpLadderEnabled INTEGER NOT NULL DEFAULT 1,
+    autoGasFee INTEGER NOT NULL DEFAULT 1,
+    autoSlippage INTEGER NOT NULL DEFAULT 1,
+    apiEnabled INTEGER NOT NULL DEFAULT 1
   );
 
   CREATE TABLE IF NOT EXISTS state(
@@ -90,194 +86,115 @@ db.exec(`
   );
 `);
 
-const existingConfig = db
-  .prepare("SELECT 1 FROM config WHERE id=1")
-  .get();
+function addColumnIfMissing(name:string, definition:string):void {
+  const columns = db.prepare("PRAGMA table_info(config)").all() as Array<{name:string}>;
+  if (!columns.some((column) => column.name === name)) {
+    db.exec(`ALTER TABLE config ADD COLUMN ${name} ${definition}`);
+  }
+}
 
+addColumnIfMissing("walletEnabled", "INTEGER NOT NULL DEFAULT 0");
+addColumnIfMissing("walletAddress", "TEXT NOT NULL DEFAULT ''");
+addColumnIfMissing("tpLadderEnabled", "INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("autoGasFee", "INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("autoSlippage", "INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("apiEnabled", "INTEGER NOT NULL DEFAULT 1");
+
+const existingConfig = db.prepare("SELECT 1 FROM config WHERE id=1").get();
 if (!existingConfig) {
   db.prepare(`
     INSERT INTO config(
-      id,
-      buyAmountUsd,
-      maxBuysPerCa,
-      dailyMaxTrades,
-      dailyMaxLossUsd,
-      slippageBps,
-      priorityFeeLamports,
-      rpcUrl,
-      tp1Percent,
-      tp1SellPercent,
-      tp2Percent,
-      tp2SellPercent,
-      moonbagPercent,
-      consecutiveLossStop,
-      minimumWalletBalanceSol,
-      maximumConcurrentPositions
-    )
-    VALUES(
-      1,
-      @buyAmountUsd,
-      @maxBuysPerCa,
-      @dailyMaxTrades,
-      @dailyMaxLossUsd,
-      @slippageBps,
-      @priorityFeeLamports,
-      @rpcUrl,
-      @tp1Percent,
-      @tp1SellPercent,
-      @tp2Percent,
-      @tp2SellPercent,
-      @moonbagPercent,
-      @consecutiveLossStop,
-      @minimumWalletBalanceSol,
-      @maximumConcurrentPositions
+      id,buyAmountUsd,maxBuysPerCa,dailyMaxTrades,dailyMaxLossUsd,
+      slippageBps,priorityFeeLamports,rpcUrl,tp1Percent,tp1SellPercent,
+      tp2Percent,tp2SellPercent,moonbagPercent,consecutiveLossStop,
+      minimumWalletBalanceSol,maximumConcurrentPositions,walletEnabled,
+      walletAddress,tpLadderEnabled,autoGasFee,autoSlippage,apiEnabled
+    ) VALUES(
+      1,@buyAmountUsd,@maxBuysPerCa,@dailyMaxTrades,@dailyMaxLossUsd,
+      @slippageBps,@priorityFeeLamports,@rpcUrl,@tp1Percent,@tp1SellPercent,
+      @tp2Percent,@tp2SellPercent,@moonbagPercent,@consecutiveLossStop,
+      @minimumWalletBalanceSol,@maximumConcurrentPositions,@walletEnabled,
+      @walletAddress,@tpLadderEnabled,@autoGasFee,@autoSlippage,@apiEnabled
     )
   `).run({
-    buyAmountUsd: DEFAULTS.buyAmountUsd,
-    maxBuysPerCa: DEFAULTS.maxBuysPerCa,
-    dailyMaxTrades: DEFAULTS.dailyMaxTrades,
-    dailyMaxLossUsd: DEFAULTS.dailyMaxLossUsd,
-    slippageBps: DEFAULTS.slippageBps,
-    priorityFeeLamports: DEFAULTS.priorityFeeLamports,
-    rpcUrl:
-      process.env.SOLANA_RPC_URL ??
-      "https://api.mainnet-beta.solana.com",
-    tp1Percent: DEFAULTS.tp1Percent,
-    tp1SellPercent: DEFAULTS.tp1SellPercent,
-    tp2Percent: DEFAULTS.tp2Percent,
-    tp2SellPercent: DEFAULTS.tp2SellPercent,
-    moonbagPercent: DEFAULTS.moonbagPercent,
-    consecutiveLossStop: DEFAULTS.consecutiveLossStop,
-    minimumWalletBalanceSol:
-      DEFAULTS.minimumWalletBalanceSol,
-    maximumConcurrentPositions:
-      DEFAULTS.maximumConcurrentPositions,
+    ...DEFAULTS,
+    rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com",
+    walletEnabled: DEFAULTS.walletEnabled ? 1 : 0,
+    tpLadderEnabled: DEFAULTS.tpLadderEnabled ? 1 : 0,
+    autoGasFee: DEFAULTS.autoGasFee ? 1 : 0,
+    autoSlippage: DEFAULTS.autoSlippage ? 1 : 0,
+    apiEnabled: DEFAULTS.apiEnabled ? 1 : 0,
   });
 }
 
-const existingState = db
-  .prepare("SELECT 1 FROM state WHERE id=1")
-  .get();
-
+const existingState = db.prepare("SELECT 1 FROM state WHERE id=1").get();
 if (!existingState) {
-  db.prepare(`
-    INSERT INTO state(
-      id,
-      status,
-      consecutiveLosses,
-      lastEvent,
-      updatedAt
-    )
-    VALUES(1, 'stopped', 0, NULL, ?)
-  `).run(new Date().toISOString());
+  db.prepare(`INSERT INTO state(id,status,consecutiveLosses,lastEvent,updatedAt)
+    VALUES(1,'stopped',0,NULL,?)`).run(new Date().toISOString());
 }
 
 export function getConfig(): BotConfig {
-  const row = db
-    .prepare("SELECT * FROM config WHERE id=1")
-    .get() as Record<string, unknown> | undefined;
-
-  if (!row) {
-    throw new Error(
-      "MINTLINE configuration row does not exist",
-    );
-  }
-
+  const row = db.prepare("SELECT * FROM config WHERE id=1").get() as Record<string, unknown> | undefined;
+  if (!row) throw new Error("MINTLINE configuration row does not exist");
   return {
-    buyAmountUsd: Number(row.buyAmountUsd),
-    maxBuysPerCa: Number(row.maxBuysPerCa),
-    dailyMaxTrades: Number(row.dailyMaxTrades),
-    dailyMaxLossUsd: Number(row.dailyMaxLossUsd),
-    slippageBps: Number(row.slippageBps),
-    priorityFeeLamports: Number(
-      row.priorityFeeLamports,
-    ),
-    rpcUrl: String(row.rpcUrl),
-    tp1Percent: Number(row.tp1Percent),
-    tp1SellPercent: Number(row.tp1SellPercent),
-    tp2Percent: Number(row.tp2Percent),
-    tp2SellPercent: Number(row.tp2SellPercent),
-    moonbagPercent: Number(row.moonbagPercent),
-    consecutiveLossStop: Number(
-      row.consecutiveLossStop,
-    ),
-    minimumWalletBalanceSol: Number(
-      row.minimumWalletBalanceSol,
-    ),
-    maximumConcurrentPositions: Number(
-      row.maximumConcurrentPositions,
-    ),
+    buyAmountUsd:Number(row.buyAmountUsd),
+    maxBuysPerCa:Number(row.maxBuysPerCa),
+    dailyMaxTrades:Number(row.dailyMaxTrades),
+    dailyMaxLossUsd:Number(row.dailyMaxLossUsd),
+    slippageBps:Number(row.slippageBps),
+    priorityFeeLamports:Number(row.priorityFeeLamports),
+    rpcUrl:String(row.rpcUrl),
+    tp1Percent:Number(row.tp1Percent),
+    tp1SellPercent:Number(row.tp1SellPercent),
+    tp2Percent:Number(row.tp2Percent),
+    tp2SellPercent:Number(row.tp2SellPercent),
+    moonbagPercent:Number(row.moonbagPercent),
+    consecutiveLossStop:Number(row.consecutiveLossStop),
+    minimumWalletBalanceSol:Number(row.minimumWalletBalanceSol),
+    maximumConcurrentPositions:Number(row.maximumConcurrentPositions),
+    walletEnabled:Boolean(row.walletEnabled),
+    walletAddress:String(row.walletAddress ?? ""),
+    tpLadderEnabled:Boolean(row.tpLadderEnabled),
+    autoGasFee:Boolean(row.autoGasFee),
+    autoSlippage:Boolean(row.autoSlippage),
+    apiEnabled:Boolean(row.apiEnabled),
   };
 }
 
-export function setConfig(
-  input: Partial<BotConfig>,
-): BotConfig {
-  const next: BotConfig = {
-    ...getConfig(),
-    ...input,
-  };
-
-  const statement = db.prepare(`
-    UPDATE config SET
-      buyAmountUsd=@buyAmountUsd,
-      maxBuysPerCa=@maxBuysPerCa,
-      dailyMaxTrades=@dailyMaxTrades,
-      dailyMaxLossUsd=@dailyMaxLossUsd,
-      slippageBps=@slippageBps,
-      priorityFeeLamports=@priorityFeeLamports,
-      rpcUrl=@rpcUrl,
-      tp1Percent=@tp1Percent,
-      tp1SellPercent=@tp1SellPercent,
-      tp2Percent=@tp2Percent,
-      tp2SellPercent=@tp2SellPercent,
-      moonbagPercent=@moonbagPercent,
-      consecutiveLossStop=@consecutiveLossStop,
-      minimumWalletBalanceSol=@minimumWalletBalanceSol,
-      maximumConcurrentPositions=@maximumConcurrentPositions
-    WHERE id=1
-  `);
-
-  statement.run({
-    buyAmountUsd: next.buyAmountUsd,
-    maxBuysPerCa: next.maxBuysPerCa,
-    dailyMaxTrades: next.dailyMaxTrades,
-    dailyMaxLossUsd: next.dailyMaxLossUsd,
-    slippageBps: next.slippageBps,
-    priorityFeeLamports: next.priorityFeeLamports,
-    rpcUrl: next.rpcUrl,
-    tp1Percent: next.tp1Percent,
-    tp1SellPercent: next.tp1SellPercent,
-    tp2Percent: next.tp2Percent,
-    tp2SellPercent: next.tp2SellPercent,
-    moonbagPercent: next.moonbagPercent,
-    consecutiveLossStop: next.consecutiveLossStop,
-    minimumWalletBalanceSol:
-      next.minimumWalletBalanceSol,
-    maximumConcurrentPositions:
-      next.maximumConcurrentPositions,
-  });
-
+export function setConfig(input:Partial<BotConfig>):BotConfig {
+  const next:BotConfig = {...getConfig(),...input};
+  db.prepare(`UPDATE config SET
+    buyAmountUsd=@buyAmountUsd,maxBuysPerCa=@maxBuysPerCa,
+    dailyMaxTrades=@dailyMaxTrades,dailyMaxLossUsd=@dailyMaxLossUsd,
+    slippageBps=@slippageBps,priorityFeeLamports=@priorityFeeLamports,
+    rpcUrl=@rpcUrl,tp1Percent=@tp1Percent,tp1SellPercent=@tp1SellPercent,
+    tp2Percent=@tp2Percent,tp2SellPercent=@tp2SellPercent,
+    moonbagPercent=@moonbagPercent,consecutiveLossStop=@consecutiveLossStop,
+    minimumWalletBalanceSol=@minimumWalletBalanceSol,
+    maximumConcurrentPositions=@maximumConcurrentPositions,
+    walletEnabled=@walletEnabled,walletAddress=@walletAddress,
+    tpLadderEnabled=@tpLadderEnabled,autoGasFee=@autoGasFee,
+    autoSlippage=@autoSlippage,apiEnabled=@apiEnabled
+    WHERE id=1`).run({
+      buyAmountUsd:next.buyAmountUsd,maxBuysPerCa:next.maxBuysPerCa,
+      dailyMaxTrades:next.dailyMaxTrades,dailyMaxLossUsd:next.dailyMaxLossUsd,
+      slippageBps:next.slippageBps,priorityFeeLamports:next.priorityFeeLamports,
+      rpcUrl:next.rpcUrl,tp1Percent:next.tp1Percent,tp1SellPercent:next.tp1SellPercent,
+      tp2Percent:next.tp2Percent,tp2SellPercent:next.tp2SellPercent,
+      moonbagPercent:next.moonbagPercent,consecutiveLossStop:next.consecutiveLossStop,
+      minimumWalletBalanceSol:next.minimumWalletBalanceSol,
+      maximumConcurrentPositions:next.maximumConcurrentPositions,
+      walletEnabled:next.walletEnabled ? 1 : 0,
+      walletAddress:next.walletAddress,
+      tpLadderEnabled:next.tpLadderEnabled ? 1 : 0,
+      autoGasFee:next.autoGasFee ? 1 : 0,
+      autoSlippage:next.autoSlippage ? 1 : 0,
+      apiEnabled:next.apiEnabled ? 1 : 0,
+    });
   return next;
 }
 
-export function log(
-  action: string,
-  result: string,
-  error?: string,
-): void {
-  db.prepare(`
-    INSERT INTO logs(
-      timestamp,
-      action,
-      result,
-      error
-    )
-    VALUES(?, ?, ?, ?)
-  `).run(
-    new Date().toISOString(),
-    action,
-    result,
-    error ?? null,
-  );
+export function log(action:string,result:string,error?:string):void {
+  db.prepare(`INSERT INTO logs(timestamp,action,result,error) VALUES(?,?,?,?)`)
+    .run(new Date().toISOString(),action,result,error ?? null);
 }
