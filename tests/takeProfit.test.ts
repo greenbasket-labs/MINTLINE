@@ -1,0 +1,2 @@
+import {describe,it,expect} from 'vitest'; import {sellDecision,validateTp} from '../apps/api/src/services/takeProfit.js';
+describe('take profit',()=>{const c={tp1Percent:50,tp1SellPercent:70,tp2Percent:100,tp2SellPercent:20,moonbagPercent:10};it('holds below TP1',()=>expect(sellDecision(20,0,c).sellPercent).toBe(0));it('sells TP1',()=>expect(sellDecision(50,0,c).sellPercent).toBe(70));it('sells TP2 after TP1',()=>expect(sellDecision(100,70,c).sellPercent).toBe(20));it('keeps moonbag',()=>expect(validateTp(c)).toBe(true));});
