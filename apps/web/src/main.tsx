@@ -2,7 +2,7 @@ import React,{useEffect,useState} from "react";
 import {createRoot} from "react-dom/client";
 import "./style.css";
 
-const API=import.meta.env.VITE_API_URL??"http://localhost:10000";
+const API=import.meta.env.VITE_API_URL??"";
 type Dash={status:string;executionEnabled:boolean;walletBalanceSol:number;todayTrades:number;todayProfitUsd:number;openPositions:number;consecutiveLosses:number;lastEvent:string|null};
 
 function App(){
