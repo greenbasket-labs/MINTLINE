@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import pino from "pino";
 import pinoHttpModule from "pino-http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { router } from "./routes.js";
 
 const app = express();
@@ -15,6 +17,10 @@ app.use(pinoHttp({ logger }));
 app.use(cors());
 app.use(express.json({ limit: "16kb" }));
 app.use(router);
+
+const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
+app.use(express.static(webDist));
+app.get("/", (_req, res) => res.sendFile(path.join(webDist, "index.html")));
 
 const port = Number(process.env.API_PORT ?? 10000);
 
