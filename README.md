@@ -1,8 +1,43 @@
 # MINTLINE
 
-Minimal Solana execution-control MVP with permanent CA blocking, capital guardrails, deterministic TP rules, and a five-page operator console.
+**Minimal Solana execution-control MVP with explicit safety guardrails.**
 
-**Safety:** this package is paper-execution only. No private-key signer or live transaction submission is included. `EXECUTION_ENABLED` remains locked by default.
+MINTLINE is a paper-execution system for testing deterministic token-entry and position-management rules without submitting live transactions.
+
+> **Safety: paper execution only. No private-key signer or live transaction submission is included. `EXECUTION_ENABLED` remains locked by default.**
+
+## What It Demonstrates
+
+- permanent contract-address blocking after a buy
+- capital guardrails
+- deterministic take-profit rules
+- daily trade limits
+- daily loss limits
+- consecutive-loss protection
+- maximum concurrent positions
+- operator-console workflows
+
+## Default Rules
+
+| Rule | Default |
+|---|---:|
+| Buy size | $5 |
+| TP1 | +50% → sell 70% |
+| TP2 | +100% → sell 20% |
+| Remaining position | 10% |
+| Daily trades | 100 max |
+| Daily loss | $25 max |
+| Consecutive losses | 5 max |
+| Minimum balance | 0.05 SOL |
+| Concurrent positions | 10 max |
+
+These are **MINTLINE configuration defaults**, not investment recommendations or claims of profitability.
+
+## Safety Model
+
+The project intentionally separates rule evaluation from live execution. The repository does not include a private-key signer or live transaction submission path.
+
+Before any real-money deployment, the system would require additional security review, execution testing, key-management design, monitoring, and operational controls.
 
 ## Run
 
@@ -15,15 +50,6 @@ pnpm --filter @mintline/api dev
 pnpm --filter @mintline/web dev
 ```
 
-## Rules
+## Project Position
 
-- $5 default buy
-- One buy per CA, permanently blocked afterward
-- TP1 +50% -> sell 70%
-- TP2 +100% -> sell 20%
-- 10% moonbag never auto-sold
-- 100 daily trades
-- $25 daily loss limit
-- 5 consecutive-loss stop
-- 0.05 SOL minimum balance
-- 10 maximum concurrent positions
+MINTLINE is best viewed as a **systems and safety-engineering prototype**: explicit rules, bounded execution, and conservative defaults are part of the design.
