@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: npm
+    directory: "/apps/api"
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: npm
+    directory: "/apps/web"
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: npm
+    directory: "/packages/shared"
+    schedule:
+      interval: monthly
